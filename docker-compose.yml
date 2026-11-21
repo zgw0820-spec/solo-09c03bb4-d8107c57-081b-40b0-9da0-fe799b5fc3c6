@@ -1,0 +1,59 @@
+# Local demo: two Prometheus replicas remote-writing into one receiver.
+services:
+  receiver:
+    build: ./receiver
+    container_name: rw-demo-receiver
+    environment:
+      DB_PATH: /data/receiver.db
+      STALE_AFTER_SECONDS: "10"
+      DOCKER_BASE_URL: unix:///var/run/docker.sock
+      REPLICA_CONTAINERS: "A=rw-demo-prom-a,B=rw-demo-prom-b"
+    ports:
+      - "8000:8000"
+    volumes:
+      - receiver-data:/data
+      # Needed so the web UI can pause/resume the demo Prometheus containers.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - demo
+    restart: unless-stopped
+
+  prom-a:
+    image: prom/prometheus:v2.54.1
+    container_name: rw-demo-prom-a
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus-a.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-a-data:/prometheus
+    depends_on:
+      - receiver
+    restart: unless-stopped
+
+  prom-b:
+    image: prom/prometheus:v2.54.1
+    container_name: rw-demo-prom-b
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus-b.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-b-data:/prometheus
+    depends_on:
+      - receiver
+    restart: unless-stopped
+
+  demo:
+    build: ./demo
+    container_name: rw-demo-demo
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+volumes:
+  receiver-data:
+  prom-a-data:
+  prom-b-data:
